@@ -1,0 +1,103 @@
+name: Generate TestDriver Tests
+
+on:
+  workflow_run:
+    workflows: ["Build and Deploy"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      app_type:
+        description: 'Application type'
+        required: true
+        default: 'web'
+        type: choice
+        options:
+          - web
+          - desktop
+          - mobile
+      count:
+        description: 'Number of tests to generate'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  generate-tests:
+    runs-on: ubuntu-latest
+    # Only run if the build workflow succeeded or if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get deployment URL
+        id: get-url
+        run: |
+          # Set the GitHub Pages URL for the Square Open Source Portal
+          REPO_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)
+          echo "deployment_url=https://${{ github.repository_owner }}.github.io/${REPO_NAME}" >> $GITHUB_OUTPUT
+      
+      - name: Output deployment URL
+        run: |
+          echo "Generating tests for: ${{ steps.get-url.outputs.deployment_url }}"
+
+      - name: Create testdriver directories
+        run: |
+          mkdir -p testdriver/generate
+          mkdir -p testdriver/lifecycle
+
+      - name: Generate exploratory tests
+        env:
+          TD_API_KEY: ${{ secrets.TD_API_KEY }}
+          TD_WEBSITE: ${{ steps.get-url.outputs.deployment_url }}
+        run: |
+          # Generate exploratory tests for the Square Open Source Portal
+          APP_TYPE="${{ github.event.inputs.app_type || 'web' }}"
+          COUNT="${{ github.event.inputs.count || '5' }}"
+          
+          echo "Generating ${COUNT} tests for ${APP_TYPE} application..."
+          npx testdriverai@latest generate --app-type "${APP_TYPE}" --count "${COUNT}" || true
+
+      - name: Commit generated tests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if there are new files to commit
+          if [ -d "testdriver/generate" ] && [ -n "$(ls -A testdriver/generate 2>/dev/null)" ]; then
+            git add testdriver/generate/
+            
+            # Check if there are changes to commit
+            if git diff --staged --quiet; then
+              echo "No new tests generated"
+            else
+              git commit -m "🧪 Auto-generate TestDriver tests for Square Open Source Portal
+              
+              - Generated ${{ github.event.inputs.count || '5' }} exploratory tests
+              - App type: ${{ github.event.inputs.app_type || 'web' }}
+              - Target: ${{ steps.get-url.outputs.deployment_url }}"
+              git push
+              echo "✅ Tests committed successfully"
+            fi
+          else
+            echo "No tests directory found or directory is empty"
+          fi
+
+      - name: Upload generated tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-tests-${{ github.run_number }}
+          path: testdriver/generate/
+          if-no-files-found: ignore
+          retention-days: 30
