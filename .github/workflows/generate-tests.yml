@@ -1,0 +1,107 @@
+name: Generate TestDriver Tests
+
+on:
+  workflow_run:
+    workflows: ["Build and Deploy"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      app_type:
+        description: 'Application type'
+        required: true
+        default: 'web'
+        type: choice
+        options:
+          - web
+          - mobile
+          - desktop
+      count:
+        description: 'Number of tests to generate'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  generate-tests:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get deployment URL
+        id: get-url
+        run: |
+          # Square's GitHub Pages URL
+          echo "deployment_url=https://square.github.io" >> $GITHUB_OUTPUT
+
+      - name: Create testdriver directories
+        run: |
+          mkdir -p testdriver/generate
+          mkdir -p testdriver/lifecycle
+
+      - name: Generate TestDriver tests
+        env:
+          TD_API_KEY: ${{ secrets.TD_API_KEY }}
+          TD_WEBSITE: ${{ steps.get-url.outputs.deployment_url }}
+        run: |
+          # Generate exploratory tests for the Square open source portal
+          npx testdriverai@latest generate \
+            --app-type "${{ github.event.inputs.app_type || 'web' }}" \
+            --count "${{ github.event.inputs.count || '5' }}" || true
+
+      - name: Commit generated tests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ -d "testdriver/generate" ] && [ -n "$(ls -A testdriver/generate 2>/dev/null)" ]; then
+            git add testdriver/generate/
+            
+            if git diff --staged --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "🧪 Auto-generate TestDriver tests
+              
+              Generated ${{ github.event.inputs.count || '5' }} exploratory tests for Square Open Source Portal
+              App type: ${{ github.event.inputs.app_type || 'web' }}
+              Target URL: https://square.github.io"
+              
+              git push || echo "Push failed, may need to pull first"
+            fi
+          else
+            echo "No tests were generated"
+          fi
+
+      - name: Create PR comment with generation summary
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const generatePath = 'testdriver/generate';
+            
+            if (fs.existsSync(generatePath)) {
+              const files = fs.readdirSync(generatePath).filter(f => f.endsWith('.yaml'));
+              const count = files.length;
+              
+              if (count > 0) {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: `🧪 **TestDriver Test Generation Complete**\n\nGenerated ${count} exploratory test(s) for the Square Open Source Portal.\n\nTests are located in \`testdriver/generate/\` and can be run with:\n\`\`\`bash\nnpx testdriverai@latest run testdriver/generate/*.yaml\n\`\`\`\n\nTo convert to regression tests, use:\n\`\`\`bash\nnpx testdriverai@latest run testdriver/generate/*.yaml --write\n\`\`\``
+                });
+              }
+            }
