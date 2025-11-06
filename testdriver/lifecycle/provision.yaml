@@ -1,0 +1,28 @@
+version: 6.0.0
+steps:
+  - prompt: Install Ruby and Jekyll dependencies for Square open source portal
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Check if Ruby is installed
+          Write-Host "Checking Ruby installation..."
+          $rubyVersion = ruby --version 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Ruby is not installed. Please install Ruby first."
+            exit 1
+          }
+          Write-Host "Ruby version: $rubyVersion"
+          
+          # Install bundler if not present
+          Write-Host "Installing bundler..."
+          gem install bundler --no-document
+          
+          # Install Jekyll and dependencies
+          Write-Host "Installing Jekyll dependencies..."
+          bundle install
+          
+          Write-Host "Jekyll setup complete!"
+      - command: wait-for-text
+        text: "Bundle complete"
+        timeout: 120000
