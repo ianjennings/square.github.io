@@ -1,0 +1,14 @@
+version: 6.0.0
+steps:
+  - prompt: Launch Chrome browser and navigate to the pre-built Square Open Source Portal on GitHub Pages
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Launch Chrome with the deployed GitHub Pages URL
+          # The site is already built and deployed by the build-and-deploy workflow
+          Start-Process "C:/Program Files/Google/Chrome/Application/chrome.exe" -ArgumentList "--start-maximized", "${TD_WEBSITE}"
+          exit
+      - command: wait-for-text
+        text: "Square"
+        timeout: 30000
