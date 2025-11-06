@@ -1,0 +1,63 @@
+name: TestDriver Tests
+
+on:
+  workflow_run:
+    workflows: ["Build and Deploy"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Get deployment URL
+        id: get-url
+        run: |
+          # Square's GitHub Pages URL
+          echo "deployment_url=https://square.github.io" >> $GITHUB_OUTPUT
+
+      - name: Run TestDriver Tests
+        env:
+          TD_API_KEY: ${{ secrets.TD_API_KEY }}
+          TD_WEBSITE: ${{ steps.get-url.outputs.deployment_url }}
+        run: |
+          # Run all generated tests
+          npx testdriverai@latest run testdriver/generate/*.yaml
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testdriver-results
+          path: testdriver/results/
+          if-no-files-found: ignore
+          retention-days: 30
+      
+      - name: Comment PR with results
+        if: github.event.workflow_run.event == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const resultsPath = 'testdriver/results/';
+            if (fs.existsSync(resultsPath)) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '✅ TestDriver tests completed. Check the artifacts for detailed results.'
+              });
+            }
