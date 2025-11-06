@@ -1,0 +1,35 @@
+name: TestDriver Tests
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run TestDriver Tests
+        env:
+          TD_API_KEY: ${{ secrets.TD_API_KEY }}
+        run: |
+          npx testdriverai@latest run .testdriver/*.yaml
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testdriver-results
+          path: .testdriver/results/
+          if-no-files-found: ignore
