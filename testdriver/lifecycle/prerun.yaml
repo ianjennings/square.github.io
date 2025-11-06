@@ -1,0 +1,15 @@
+version: 6.0.0
+steps:
+  - prompt: Refresh the page to ensure clean state for each test
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Ensure we're starting from the homepage for each test
+          Write-Host "Navigating to ${TD_WEBSITE}"
+          exit
+      - command: navigate
+        url: "${TD_WEBSITE}"
+      - command: wait-for-text
+        text: "Square Open Source"
+        timeout: 10000
