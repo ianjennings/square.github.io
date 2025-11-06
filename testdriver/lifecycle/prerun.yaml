@@ -1,0 +1,58 @@
+version: 6.0.0
+steps:
+  - prompt: Start Jekyll server for Square open source portal
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Start Jekyll server in background
+          Write-Host "Starting Jekyll server..."
+          $jekyllProcess = Start-Process -FilePath "bundle" -ArgumentList "exec", "jekyll", "serve", "--host", "0.0.0.0" -PassThru -NoNewWindow
+          
+          # Wait a moment for server to start
+          Start-Sleep -Seconds 5
+          
+          # Check if process is running
+          if ($jekyllProcess.HasExited) {
+            Write-Host "Failed to start Jekyll server"
+            exit 1
+          }
+          
+          Write-Host "Jekyll server started with PID: $($jekyllProcess.Id)"
+          Write-Host "Server should be available at http://localhost:4000"
+      - command: wait-for-text
+        text: "Server running"
+        timeout: 30000
+  
+  - prompt: Verify the Square open source portal is accessible
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Wait for the server to be fully ready
+          Write-Host "Waiting for server to be ready..."
+          $maxAttempts = 30
+          $attempt = 0
+          $serverReady = $false
+          
+          while ($attempt -lt $maxAttempts -and -not $serverReady) {
+            try {
+              $response = Invoke-WebRequest -Uri "http://localhost:4000" -TimeoutSec 2 -UseBasicParsing
+              if ($response.StatusCode -eq 200) {
+                $serverReady = $true
+                Write-Host "Server is ready!"
+              }
+            } catch {
+              $attempt++
+              Write-Host "Attempt $attempt/$maxAttempts - Server not ready yet..."
+              Start-Sleep -Seconds 2
+            }
+          }
+          
+          if (-not $serverReady) {
+            Write-Host "Server failed to start within timeout period"
+            exit 1
+          }
+      - command: wait-for-text
+        text: "Server is ready"
+        timeout: 60000
