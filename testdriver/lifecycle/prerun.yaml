@@ -1,0 +1,11 @@
+version: 6.0.0
+steps:
+  - prompt: Ensure browser is ready for testing
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Simple health check - no building required
+          Write-Host "Starting test run for Square Open Source Portal"
+          Write-Host "Target URL: ${TD_WEBSITE}"
+          exit
