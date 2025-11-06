@@ -1,0 +1,20 @@
+version: 6.0.0
+steps:
+  - prompt: Launch Chrome browser and navigate to Square Open Source Portal
+    commands:
+      - command: exec
+        lang: pwsh
+        code: |
+          # Launch Chrome with the pre-built Jekyll site
+          # The site should already be built and served by GitHub Actions
+          Start-Process "C:/Program Files/Google/Chrome/Application/chrome.exe" -ArgumentList "--start-maximized", "${TD_WEBSITE}"
+          exit
+      - command: wait-for-text
+        text: "Square Open Source"
+        timeout: 30000
+  
+  - prompt: Verify page has fully loaded with repository listings
+    commands:
+      - command: wait-for-text
+        text: "repos"
+        timeout: 15000
