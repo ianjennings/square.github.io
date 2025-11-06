@@ -1,0 +1,45 @@
+name: Generate TestDriver Tests
+
+on:
+  push:
+    branches:
+      - 'mechanic/setup-testdriver*'
+  workflow_dispatch:
+    inputs:
+      app_type:
+        description: 'Application type'
+        required: true
+        default: 'web'
+      count:
+        description: 'Number of tests'
+        required: true
+        default: '5'
+
+jobs:
+  generate-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate tests
+        env:
+          TD_API_KEY: ${{ secrets.TD_API_KEY }}
+        run: |
+          npx testdriverai@latest generate --app-type "${{ inputs.app_type || 'web' }}" --count "${{ inputs.count || '5' }}" || true
+
+      - name: Commit generated tests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -d "testdriver/generate" ] && [ -n "$(ls -A testdriver/generate 2>/dev/null)" ]; then
+            git add testdriver/generate/
+            git commit -m "🧪 Auto-generate tests" || true
+            git push || true
+          fi
